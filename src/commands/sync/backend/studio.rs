@@ -1,5 +1,5 @@
 use std::{env, path::PathBuf};
-
+use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Context;
 use log::{debug, info, warn};
 use roblox_install::RobloxStudio;
@@ -85,13 +85,19 @@ impl SyncBackend for StudioBackend {
             return Ok(SyncResult::None);
         }
 
-        let asset_path = asset_path(state.asset_dir.to_str().unwrap(), path, asset.extension())
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_millis();
+        let asset_name = asset.name().replace(&format!(".{}", asset.extension()), "");
+        let unique_asset_name = format!("{}_{}.{}", asset_name, now, asset.extension());
+        let unique_path = path.replace(asset.name(), &unique_asset_name);
+
+        let asset_path = asset_path(state.asset_dir.to_str().unwrap(), &unique_path, asset.extension())
             .context("Failed to normalize asset path")?;
+
         write_to_path(&self.sync_path, &asset_path, asset.data())
             .await
             .context("Failed to sync asset to Roblox Studio")?;
 
-        info!("Synced {path}");
+        info!("Synced {unique_path}");
         Ok(SyncResult::Studio(format!(
             "rbxasset://{}/{}",
             self.identifier,
